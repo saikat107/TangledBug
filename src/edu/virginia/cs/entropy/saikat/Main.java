@@ -77,19 +77,25 @@ public class Main {
                     ArrayList<DataObject> 
                             changes = perSnapShotPerBFShaMap.get(fileName);
                     
-                    Util.sortBasedOnentropy(changes);
+                    Util.sortBasedOnZle(changes);
                     
-                    double totalEntropy = 0;
+                    /*double totalEntropy = 0;
                     for(DataObject d: changes){
                         totalEntropy += d.entropy;
+                    }*/
+                    double min = changes.get(changes.size() - 1).zle;
+
+                    double totalZle = 0;
+                    for(DataObject d : changes){
+                        totalZle += (d.zle - min);
                     }
-                    
+                    System.out.println(bfSha + "\t" + totalZle);
                     double percentage = Configuration.percentageThreshold;
-                    double thresHold = totalEntropy * percentage;
+                    double thresHold = totalZle * percentage;
                     double zleSoFar = 0;
                     
                     for(int i = 0; i < changes.size(); i++){
-                        zleSoFar += changes.get(i).entropy;
+                        zleSoFar += (changes.get(i).zle - min);
                         lineWriter.println(changes.get(i).sourceLine + "," + 
                                 changes.get(i).tokenLine);
                         if(zleSoFar >= thresHold){
@@ -247,7 +253,7 @@ class Util{
         return data;
     }
 
-    static ArrayList<DataObject> sortBasedOnentropy(ArrayList<DataObject> data) {
+    static ArrayList<DataObject> sortBasedOnEntropy(ArrayList<DataObject> data) {
         int n = data.size();
         for (int c = 0; c < (n - 1); c++) {
             for (int d = 0; d < n - c - 1; d++) {
