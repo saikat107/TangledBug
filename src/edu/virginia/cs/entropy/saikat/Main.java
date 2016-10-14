@@ -27,8 +27,7 @@ public class Main {
      */
     public static void main(String[] args) throws Exception{
         ArrayList<DataObject> objectList = new ArrayList<>();
-        String projectName = "derby";
-        readInputFile(projectName, objectList);
+        readInputFile(objectList);
 
         HashMap<String , 
                 HashMap<String , 
@@ -38,58 +37,63 @@ public class Main {
                         >
                 > mainMap = new HashMap<>();
         
-        HashMap<String,HashMap<String, ArrayList<DataObject>>> 
-                peSnapShotMap = new HashMap<>();
         createDatabase(objectList, mainMap);
         
         
         Set<String> snapShots = mainMap.keySet();
         for(String snapShot : snapShots){
-            
+            File snapShotDir = new File("Output\\" + Configuration.projectName + "\\" +snapShot);
+            if(!snapShotDir.exists()) {
+                snapShotDir.mkdir();
+            }       
+
             PrintWriter lineWriter = new PrintWriter(
-                new File("C:\\Users\\sc2nf\\Desktop\\Tangled\\output\\line\\"
-                        + projectName + "_" + snapShot + 
-                        "_filtered_zle_lineNo.csv"));
+                new File(snapShotDir.getAbsolutePath() + 
+                        "\\filtered_zle_lineNo.csv"));
             lineWriter.println("Source Line,Token Line, File Name, bf_Sha");
             
             PrintWriter pr = new PrintWriter(
-                new File("C:\\Users\\sc2nf\\Desktop\\Tangled\\output\\zle\\"
-                        + projectName + "_" + snapShot + "_filtered_zle.csv"));
+                new File(snapShotDir.getAbsolutePath() + "\\filtered_zle.csv"));
         
             pr.println(
                 "FileName,Number Of Lines,Percentage,"
                         + "Average,Median,Standard Deviation");
             
-            peSnapShotMap = mainMap.get(snapShot);
-            Set<String> bfShaSet = peSnapShotMap.keySet();
-            //System.out.println(bfShaSet.size());
+            HashMap<String, HashMap<String , ArrayList<DataObject>>> 
+                    perSnapShotMap = mainMap.get(snapShot);
             
+            Set<String> bfShaSet = perSnapShotMap.keySet();
+            
+            //System.out.println(mainMap.get(snapShot).get("256286bb3548aae3b72eec996bf2f0f4e99482b6"));
             for(String bfSha : bfShaSet){
                 HashMap<String , ArrayList<DataObject>> 
-                        perSnapShotPerBFShaMap = peSnapShotMap.get(bfSha);
-
+                        perSnapShotPerBFShaMap = perSnapShotMap.get(bfSha);
+                
                 Set<String> fileSet = perSnapShotPerBFShaMap.keySet();
                 
-                ArrayList<Double> percentageList = new ArrayList<Double>();
+                ArrayList<Double> percentageList = new ArrayList<Double>();               
                 for(String fileName : fileSet){
-
+                    
                     ArrayList<DataObject> 
                             changes = perSnapShotPerBFShaMap.get(fileName);
-                    double totalZle = 0;
+                    
+                    Util.sortBasedOnentropy(changes);
+                    
+                    double totalEntropy = 0;
                     for(DataObject d: changes){
-                        totalZle += d.zle;
+                        totalEntropy += d.entropy;
                     }
-                    changes = sortBasedOnZle(changes);
-
-                    double percentage = 0.8;
-                    double thresHold = totalZle * percentage;
-                    double entropySoFar = 0;
-
+                    
+                    double percentage = Configuration.percentageThreshold;
+                    double thresHold = totalEntropy * percentage;
+                    double zleSoFar = 0;
+                    
                     for(int i = 0; i < changes.size(); i++){
-                        entropySoFar += changes.get(i).zle;
+                        zleSoFar += changes.get(i).entropy;
                         lineWriter.println(changes.get(i).sourceLine + "," + 
                                 changes.get(i).tokenLine);
-                        if(entropySoFar >= thresHold){
+                        if(zleSoFar >= thresHold){
+                            
                             pr.println(fileName + "," + changes.size() + "," + 
                                     (i+1.00)/changes.size());
                             percentageList.add((i + 1.00) / changes.size());
@@ -98,11 +102,12 @@ public class Main {
                     }
                     lineWriter.println(",," + fileName);
                 }
-                double average = getAverage(percentageList);
-                double sd = getStandardDeviation(percentageList);
-                double median = getMedian(percentageList);
-                pr.println(bfSha+",,," + average + "," + median + "," + sd);
-                lineWriter.println(",,," + bfSha);
+                double average = Util.getAverage(percentageList);
+                double sd = Util.getStandardDeviation(percentageList);
+                double median = Util.getMedian(percentageList);
+                
+                pr.println(bfSha+",,," + average + "," + median + "," + sd + "\n\n");
+                lineWriter.println(",,," + bfSha + "\n\n");
             }
             pr.close();
             lineWriter.close();
@@ -147,12 +152,10 @@ public class Main {
     }
 
     private static void readInputFile(
-            String projectName, ArrayList<DataObject> objectList) 
+            ArrayList<DataObject> objectList) 
             throws NumberFormatException, FileNotFoundException {
         Scanner atScan = new Scanner(
-                new File(
-                        "C:\\Users\\sc2nf\\Desktop\\Tangled\\" + 
-                                projectName + ".csv"));
+                new File(Configuration.inputFilePath));
         atScan.nextLine();
         while(atScan.hasNextLine()){
             String line = atScan.nextLine();
@@ -181,77 +184,83 @@ public class Main {
         }
     }
     
-    private static ArrayList<DataObject> sortBasedOnentropy(
-            ArrayList<DataObject> data){
-        int n = data.size();
-        for (int c = 0 ; c < ( n - 1 ); c++){
-            for (int d = 0 ; d < n - c - 1; d++){
-                if (data.get(d).entropy < data.get(d+1).entropy){
-                    DataObject swap = data.get(d);
-                    data.set(d, data.get(d+1));
-                    data.set(d+1 , swap);
-                }
-            }
-        }
-        return data;
-    }
     
-    private static ArrayList<DataObject> 
-        sortBasedOnZle(ArrayList<DataObject> data){
-        int n = data.size();
-        for (int c = 0 ; c < ( n - 1 ); c++){
-            for (int d = 0 ; d < n - c - 1; d++){
-                if (data.get(d).zle < data.get(d+1).zle){
-                    DataObject swap = data.get(d);
-                    data.set(d, data.get(d+1));
-                    data.set(d+1 , swap);
-                }
-            }
+
+}
+
+class Util{
+
+    static double getAverage(ArrayList<Double> percentageList) {
+        double total = 0;
+        for (Double d : percentageList) {
+            total += d;
         }
-        return data;
+        return total / percentageList.size();
     }
-    
-    private static int[][] getArrayOfPair(ArrayList<pair> p){
-        int [][]ret = new int[p.size()][2];
-        for(int i = 0; i < p.size(); i++){
+
+    static double getStandardDeviation(ArrayList<Double> percentageList) {
+        double average = getAverage(percentageList);
+        double total = 0;
+        for (Double d : percentageList) {
+            total += (d - average) * (d - average);
+        }
+        double sd = Math.sqrt(total / percentageList.size());
+        return sd;
+    }
+
+    private static int[][] getArrayOfPair(ArrayList<pair> p) {
+        int[][] ret = new int[p.size()][2];
+        for (int i = 0; i < p.size(); i++) {
             ret[i][0] = p.get(i).totalLine;
             ret[i][1] = p.get(i).tLine;
         }
         return ret;
     }
 
-    private static double getStandardDeviation(ArrayList<Double> percentageList) {
-        double average = getAverage(percentageList);
-        double total = 0;
-        for(Double d:percentageList){
-            total += (d-average)*(d-average);
-        }
-        double sd = Math.sqrt(total/percentageList.size());
-        return sd;
-    }
-
-    private static double getMedian(ArrayList<Double> percentageList) {
-        Object []percentages = percentageList.toArray();
+    static double getMedian(ArrayList<Double> percentageList) {
+        Object[] percentages = percentageList.toArray();
         Arrays.sort(percentages);
-        if(percentages.length == 0) return -1;
-        if(percentages.length%2 == 0){
-            double a1 = (Double)percentages[percentages.length/2];
-            double a2 = (Double)percentages[percentages.length/2 - 1];
-            return (a1+a2)/2;
+        if (percentages.length == 0) {
+            return -1;
         }
-        else{
-            int idx = percentages.length/2;
-            return (Double)percentages[idx];
+        if (percentages.length % 2 == 0) {
+            double a1 = (Double) percentages[percentages.length / 2];
+            double a2 = (Double) percentages[percentages.length / 2 - 1];
+            return (a1 + a2) / 2;
+        } else {
+            int idx = percentages.length / 2;
+            return (Double) percentages[idx];
         }
     }
 
-    private static double getAverage(ArrayList<Double> percentageList) {
-        double total = 0;
-        for(Double d:percentageList){
-            total+=d;
+    static ArrayList<DataObject> sortBasedOnZle(ArrayList<DataObject> data) {
+        int n = data.size();
+        for (int c = 0; c < (n - 1); c++) {
+            for (int d = 0; d < n - c - 1; d++) {
+                if (data.get(d).zle < data.get(d + 1).zle) {
+                    DataObject swap = data.get(d);
+                    data.set(d, data.get(d + 1));
+                    data.set(d + 1, swap);
+                }
+            }
         }
-        return total/percentageList.size();
+        return data;
     }
+
+    static ArrayList<DataObject> sortBasedOnentropy(ArrayList<DataObject> data) {
+        int n = data.size();
+        for (int c = 0; c < (n - 1); c++) {
+            for (int d = 0; d < n - c - 1; d++) {
+                if (data.get(d).entropy < data.get(d + 1).entropy) {
+                    DataObject swap = data.get(d);
+                    data.set(d, data.get(d + 1));
+                    data.set(d + 1, swap);
+                }
+            }
+        }
+        return data;
+    }
+    
 }
 class pair{
     int totalLine;
